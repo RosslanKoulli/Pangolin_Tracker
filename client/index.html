@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="ZAP - Pangolin Sighting Tracker for conservation research">
+    <meta name="theme-color" content="#2D5A27">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ZAP">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Favicon and App Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    
+    <title>ZAP - Pangolin Tracker</title>
+</head>
+<body>
+    <!-- App Shell - Renders instantly for perceived performance -->
+    <div id="app" class="app-container">
+        
+        <!-- Header -->
+        <header class="app-header" role="banner">
+            <div class="header-content">
+                <h1 class="app-title">
+                    <span class="logo-icon" aria-hidden="true">🦔</span>
+                    <span>ZAP</span>
+                </h1>
+                <p class="app-subtitle">Pangolin Tracker</p>
+            </div>
+            <div class="header-actions">
+                <button id="syncBtn" class="icon-btn" aria-label="Sync data" title="Sync pending sightings">
+                    <span class="sync-icon">⟳</span>
+                    <span id="pendingCount" class="badge" hidden>0</span>
+                </button>
+                <div id="connectionStatus" class="connection-indicator" aria-live="polite">
+                    <span class="status-dot online" aria-hidden="true"></span>
+                    <span class="status-text">Online</span>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Navigation Tabs -->
+        <nav class="tab-navigation" role="tablist" aria-label="Main navigation">
+            <button id="tabSightings" class="tab-btn active" role="tab" 
+                    aria-selected="true" aria-controls="viewSightings">
+                <span class="tab-icon" aria-hidden="true">📋</span>
+                <span class="tab-label">Sightings</span>
+            </button>
+            <button id="tabAdd" class="tab-btn" role="tab" 
+                    aria-selected="false" aria-controls="viewAdd">
+                <span class="tab-icon" aria-hidden="true">➕</span>
+                <span class="tab-label">Record</span>
+            </button>
+            <button id="tabAnalytics" class="tab-btn" role="tab" 
+                    aria-selected="false" aria-controls="viewAnalytics">
+                <span class="tab-icon" aria-hidden="true">📊</span>
+                <span class="tab-label">Analytics</span>
+            </button>
+        </nav>
+        
+        <!-- Main Content Views -->
+        <main class="main-content" role="main">
+            
+            <!-- Sightings List View -->
+            <section id="viewSightings" class="view active" role="tabpanel" 
+                     aria-labelledby="tabSightings">
+                <div class="view-header">
+                    <h2>Recent Sightings</h2>
+                    <div class="filter-controls">
+                        <select id="filterStatus" aria-label="Filter by status">
+                            <option value="all">All Status</option>
+                            <option value="alive">Alive</option>
+                            <option value="dead">Dead</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Loading State -->
+                <div id="sightingsLoading" class="loading-state" hidden>
+                    <div class="spinner" aria-hidden="true"></div>
+                    <p>Loading sightings...</p>
+                </div>
+                
+                <!-- Empty State -->
+                <div id="sightingsEmpty" class="empty-state" hidden>
+                    <div class="empty-illustration" aria-hidden="true">🦔</div>
+                    <h3>No Sightings Yet</h3>
+                    <p>Be the first to record a pangolin sighting in your area!</p>
+                    <button class="btn btn-primary" data-action="go-to-add">
+                        Record Sighting
+                    </button>
+                </div>
+                
+                <!-- Sightings List -->
+                <ul id="sightingsList" class="sightings-list" role="list">
+                    <!-- Sightings will be dynamically inserted here -->
+                </ul>
+            </section>
+            
+            <!-- Add Sighting View -->
+            <section id="viewAdd" class="view" role="tabpanel" 
+                     aria-labelledby="tabAdd" hidden>
+                <div class="view-header">
+                    <h2>Record New Sighting</h2>
+                </div>
+                
+                <form id="sightingForm" class="sighting-form" novalidate>
+                    <!-- Photo Capture -->
+                    <fieldset class="form-section">
+                        <legend>Photo Evidence</legend>
+                        
+                        <div class="photo-capture">
+                            <div id="photoPreview" class="photo-preview">
+                                <div class="photo-placeholder">
+                                    <span class="placeholder-icon" aria-hidden="true">//add camera image \\</span>
+                                    <span>No photo selected</span>
+                                </div>
+                                <img id="previewImage" src="" alt="Selected photo preview" hidden>
+                            </div>
+                            
+                            <div class="photo-actions">
+                                <button type="button" id="btnCamera" class="btn btn-secondary">
+                                    <span aria-hidden="true">//add camera image \\</span> Take Photo
+                                </button>
+                                <button type="button" id="btnGallery" class="btn btn-secondary">
+                                    <span aria-hidden="true">//add gallery image \\</span> Choose from Gallery
+                                </button>
+                            </div>
+                            
+                            <!-- Hidden file input for camera/gallery -->
+                            <input type="file" id="photoInput" accept="image/*" 
+                                   aria-label="Select or capture photo" hidden>
+                        </div>
+                    </fieldset>
+                    
+                    <!-- Status Selection -->
+                    <fieldset class="form-section">
+                        <legend>Pangolin Status <span class="required">*</span></legend>
+                        
+                        <div class="status-options" role="radiogroup" 
+                             aria-required="true">
+                            <label class="status-option">
+                                <input type="radio" name="status" value="alive" required>
+                                <span class="status-card alive">
+                                    <span class="status-icon" aria-hidden="true">//add green heart image \\</span>
+                                    <span class="status-label">Alive</span>
+                                </span>
+                            </label>
+                            <label class="status-option">
+                                <input type="radio" name="status" value="dead">
+                                <span class="status-card dead">
+                                    <span class="status-icon" aria-hidden="true">//add red broken heart image \\</span>
+                                    <span class="status-label">Dead</span>
+                                </span>
+                            </label>
+                        </div>
+                        <p id="statusError" class="error-message" hidden>
+                            Please select the pangolin's status
+                        </p>
+                    </fieldset>
+                    
+                    <!-- Mortality Type (shown only when dead is selected) -->
+                    <fieldset id="mortalitySection" class="form-section" hidden>
+                        <legend>Cause of Death <span class="required">*</span></legend>
+                        
+                        <div class="mortality-options">
+                            <label class="radio-option">
+                                <input type="radio" name="mortalityType" 
+                                       value="fence_electrocution">
+                                <span class="radio-label">
+                                    <span class="radio-icon" aria-hidden="true">//add lighting image \\</span>
+                                    Fence death: Electrocution
+                                </span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="mortalityType" 
+                                       value="fence_non_electric">
+                                <span class="radio-label">
+                                    <span class="radio-icon" aria-hidden="true">//add chain image \\</span>
+                                    Fence death: Non-electrified fence
+                                </span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="mortalityType" 
+                                       value="road_death">
+                                <span class="radio-label">
+                                    <span class="radio-icon" aria-hidden="true">//add car image \\</span>
+                                    Road death
+                                </span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="mortalityType" 
+                                       value="other">
+                                <span class="radio-label">
+                                    <span class="radio-icon" aria-hidden="true">❓</span>
+                                    Other
+                                </span>
+                            </label>
+                        </div>
+                        <p id="mortalityError" class="error-message" hidden>
+                            Please select the cause of death
+                        </p>
+                    </fieldset>
+                    
+                    <!-- Location -->
+                    <fieldset class="form-section">
+                        <legend>Location <span class="required">*</span></legend>
+                        
+                        <p class="form-hint">Tap on the map to mark where the pangolin was found</p>
+                        
+                        <!-- Location Map Picker -->
+                        <div id="locationMapContainer" class="location-map-container">
+                            <div id="locationMap" class="location-map"></div>
+                        </div>
+                        
+                        <div class="location-display">
+                            <div id="locationStatus" class="location-status">
+                                <span class="location-icon" aria-hidden="true">//add pinpoint image \\</span>
+                                <span id="locationText">Tap the map to set location</span>
+                            </div>
+                            <button type="button" id="btnMyLocation" 
+                                    class="btn btn-small" aria-label="Use my current location">
+                                //add pinpoint image \\ Use My Location
+                            </button>
+                        </div>
+                        
+                        <!-- Hidden location inputs -->
+                        <input type="hidden" id="latitude" name="latitude">
+                        <input type="hidden" id="longitude" name="longitude">
+                        <input type="hidden" id="locationAccuracy" name="locationAccuracy">
+                        
+                        <p id="locationError" class="error-message" hidden>
+                            Please select a location on the map
+                        </p>
+                    </fieldset>
+                    
+                    <!-- Additional Notes -->
+                    <fieldset class="form-section">
+                        <legend>Additional Notes</legend>
+                        
+                        <div class="form-group">
+                            <label for="notes" class="visually-hidden">
+                                Additional observations
+                            </label>
+                            <textarea id="notes" name="notes" rows="4"
+                                      placeholder="Describe the sighting, fence type, road conditions, or any other relevant observations..."
+                                      maxlength="1000"></textarea>
+                            <div class="char-count">
+                                <span id="notesCount">0</span>/1000 characters
+                            </div>
+                        </div>
+                    </fieldset>
+                    
+                    <!-- Form Actions -->
+                    <div class="form-actions">
+                        <button type="submit" id="btnSubmit" class="btn btn-primary btn-large">
+                            <span class="btn-text">Submit Sighting</span>
+                            <span class="btn-loading" hidden>
+                                <span class="spinner-small" aria-hidden="true"></span>
+                                Submitting...
+                            </span>
+                        </button>
+                        <button type="reset" class="btn btn-secondary">
+                            Clear Form
+                        </button>
+                    </div>
+                </form>
+            </section>
+            
+            <!-- Analytics View -->
+            <section id="viewAnalytics" class="view" role="tabpanel" 
+                     aria-labelledby="tabAnalytics" hidden>
+                <div class="view-header">
+                    <h2>Analytics Dashboard</h2>
+                </div>
+                
+                <!-- Summary Statistics -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="statTotal">-</div>
+                        <div class="stat-label">Total Sightings</div>
+                    </div>
+                    <div class="stat-card alive">
+                        <div class="stat-value" id="statAlive">-</div>
+                        <div class="stat-label">Alive</div>
+                    </div>
+                    <div class="stat-card dead">
+                        <div class="stat-value" id="statDead">-</div>
+                        <div class="stat-label">Dead</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statRecent">-</div>
+                        <div class="stat-label">Last 7 Days</div>
+                    </div>
+                </div>
+                
+                <!-- Mortality Breakdown -->
+                <div class="analytics-section">
+                    <h3>Mortality Causes</h3>
+                    <div id="mortalityChart" class="chart-container">
+                        <div id="mortalityBars" class="bar-chart">
+                            <!-- Chart bars will be generated dynamically -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sightings Map -->
+                <div class="analytics-section">
+                    <h3>Sighting Locations</h3>
+                    <div id="analyticsMap" class="map-container">
+                        <!-- Leaflet map will be initialized here -->
+                    </div>
+                </div>
+            </section>
+            
+        </main>
+        
+        <!-- Toast Notifications -->
+        <div id="toastContainer" class="toast-container" aria-live="polite" 
+             aria-atomic="true"></div>
+        
+        <!-- Sighting Detail Modal -->
+        <dialog id="sightingModal" class="modal">
+            <div class="modal-content">
+                <header class="modal-header">
+                    <h2 id="modalTitle">Sighting Details</h2>
+                    <button class="modal-close" aria-label="Close modal">&times;</button>
+                </header>
+                <div id="modalBody" class="modal-body">
+                    <!-- Dynamic content -->
+                </div>
+            </div>
+        </dialog>
+        
+    </div>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- Application Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/db.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/location.js"></script>
+    <script src="js/camera.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // Use relative path for SW registration
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        console.log('SW registered:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.warn('SW registration failed (OK for local dev):', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
