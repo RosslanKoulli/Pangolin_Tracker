@@ -1232,7 +1232,8 @@ textarea:focus {
 
 /* ============================================
    Print Styles
-   ============================================ */
+   ============================================
+   */
 @media print {
     .app-header,
     .tab-navigation,
@@ -1247,4 +1248,24 @@ textarea:focus {
     body {
         background: white;
     }
+}
+
+/* =================================================
+    VISUAL BUG FIX FOR `Loading sightings...`
+     at the main page
+    FIX: Ensures [hidden]  attribute works properly
+   ================================================
+ */
+
+/* Forces hidden attribute to work on all elements
+ */
+[hidden] {
+    display: none !important;
+}
+
+/* Specifically for loading and empty states
+ */
+.loading-state[hidden],
+.empty-state[hidden] {
+    display:none !important;
 }
