@@ -184,17 +184,21 @@ const UI = (function() {
         elements.sightingsLoading.hidden = true;
         
         if (!sightings || sightings.length === 0) {
+            // No sightings so show empty state and hide list
             elements.sightingsEmpty.hidden = false;
             elements.sightingsList.innerHTML = '';
-            return;
+
+        } else {
+            // Has sighting so hide empty state and show list
+            elements.sightingsEmpty.hidden = true;
+            const html = sightings.map(sighting => createSightingCard(sighting)).join('');
+            elements.sightingsList.innerHTML = html;
         }
         
-        elements.sightingsEmpty.hidden = true;
+
+
         
-        const html = sightings.map(sighting => createSightingCard(sighting)).join('');
-        elements.sightingsList.innerHTML = html;
-        
-        Config.debug('UI', `Rendered ${sightings.length} sightings`);
+        Config.debug('UI', `Rendered ${sightings ? sightings.length:0} sightings`);
     }
     
     /**
@@ -205,7 +209,13 @@ const UI = (function() {
         elements.sightingsEmpty.hidden = true;
         elements.sightingsList.innerHTML = '';
     }
-    
+
+    /**
+     * Hides the loading state(calling this after the data loads)
+     */
+    function hidesSightingsLoading() {
+        elements.sightingsLoading.hidden =true;
+    }
     /**
      * Creates HTML for a sighting card
      * 
@@ -868,6 +878,7 @@ const UI = (function() {
         // Sightings
         renderSightings,
         showSightingsLoading,
+        hidesSightingsLoading,
         
         // Form
         updatePhotoPreview,
