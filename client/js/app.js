@@ -1,12 +1,14 @@
 /**
  * ZAP - Pangolin Tracker
  * Main Application Module
- */
-
+*/
 const App = (function() {
     let currentPhotoBlob = null;
     let currentPhotoUrl = null;
     let isInitialized = false;
+    
+    // Store merged sightings for click handling
+    let cachedSightings = [];
     
     async function init() {
         if (isInitialized) return;
@@ -19,7 +21,6 @@ const App = (function() {
             UI.updateConnectionStatus(navigator.onLine);
             await updatePendingSyncCount();
             await loadSightings();
-            // Don't auto-request location - user will pick on map
             isInitialized = true;
             Config.debug('App', 'Initialization complete');
         } catch (error) {
@@ -33,9 +34,6 @@ const App = (function() {
         UI.elements.tabSightings.addEventListener('click', () => UI.switchView('sightings'));
         UI.elements.tabAdd.addEventListener('click', () => {
             UI.switchView('add');
-            // Initialize and refresh the location picker map
-            UI.initLocationPickerMap();
-            UI.refreshLocationPickerMap();
         });
         UI.elements.tabAnalytics.addEventListener('click', () => {
             UI.switchView('analytics');
@@ -44,7 +42,6 @@ const App = (function() {
         
         document.addEventListener('view:changed', (e) => {
             if (e.detail.view === 'analytics') UI.refreshMap();
-            if (e.detail.view === 'add') UI.refreshLocationPickerMap();
         });
         
         // Connection events
@@ -66,9 +63,11 @@ const App = (function() {
             }
         });
         
-        // Empty state
-        document.querySelector('[data-action="go-to-add"]')?.addEventListener('click', () => {
-            UI.switchView('add');
+        // Empty state button - use event delegation since it's dynamically created
+        document.addEventListener('click', (e) => {
+            if (e.target.matches('[data-action="go-to-add"]')) {
+                UI.switchView('add');
+            }
         });
         
         // Photo buttons
@@ -80,9 +79,12 @@ const App = (function() {
             radio.addEventListener('change', handleStatusChange);
         });
         
-        // My Location button
-        if (UI.elements.btnMyLocation) {
-            UI.elements.btnMyLocation.addEventListener('click', requestLocation);
+        // Location refresh - check if button exists
+        if (UI.elements.btnRefreshLocation) {
+            UI.elements.btnRefreshLocation.addEventListener('click', () => {
+                // Trigger location picker map center if it exists
+                Config.debug('App', 'Location refresh requested');
+            });
         }
         
         // Notes count
@@ -100,8 +102,10 @@ const App = (function() {
             if (e.target === UI.elements.sightingModal) UI.closeSightingModal();
         });
         
-        // Location updates (for "Use My Location" button)
-        Location.addListener(UI.updateLocationDisplay);
+        // Location updates - only if Location module exists and has the method
+        if (typeof Location !== 'undefined' && Location.addListener) {
+            Location.addListener(UI.updateLocationDisplay);
+        }
     }
     
     async function loadSightings() {
@@ -122,12 +126,16 @@ const App = (function() {
                 }
             }
             
+            // Add thumbnail URLs for cached images
             for (const sighting of sightings) {
                 if (sighting.hasImage && !sighting.synced) {
                     const blob = await Database.getImage(sighting.clientId);
                     if (blob) sighting.thumbnailUrl = URL.createObjectURL(blob);
                 }
             }
+            
+            // Cache sightings for click handling
+            cachedSightings = sightings;
             
             UI.renderSightings(sightings);
         } catch (error) {
@@ -279,41 +287,126 @@ const App = (function() {
     
     async function handleFilterChange() { await loadSightings(); }
     
+    /**
+    
+     * This allows clicking on server-only sightings that aren't in local DB
+     */
     async function handleSightingClick(event) {
         const card = event.target.closest('.sighting-card');
         if (!card) return;
         
-        const sighting = await Database.getSighting(card.dataset.clientId);
+        const clientId = card.dataset.clientId;
+        
+        // First try to find in cached sightings (includes server data)
+        let sighting = cachedSightings.find(s => s.clientId === clientId);
+        
+        // If not found in cache, try database
+        if (!sighting) {
+            sighting = await Database.getSighting(clientId);
+        }
+        
         if (sighting) {
-            if (sighting.hasImage && !sighting.synced) {
-                const blob = await Database.getImage(sighting.clientId);
-                if (blob) sighting.imageUrl = URL.createObjectURL(blob);
+            // Load local image if available and not synced
+            if (sighting.hasImage && !sighting.synced && !sighting.imageUrl) {
+                const blob = await Database.getImage(clientId);
+                if (blob) {
+                    sighting.imageUrl = URL.createObjectURL(blob);
+                }
             }
+            
             UI.openSightingModal(sighting);
+        } else {
+            UI.showToast('Could not load sighting details', 'error');
         }
     }
     
+    /**
+     * Camera capture 
+     * Current issue: Preemptive cancellation of camera capture
+     */
     async function handleCameraCapture() {
         try {
-            const file = await Camera.captureFromCamera(UI.elements.photoInput);
+            const fileInput = UI.elements.photoInput;
+            
+            // Reset and configure for camera
+            fileInput.value = '';
+            fileInput.accept = 'image/*';
+            fileInput.capture = 'environment';
+            
+            // Create promise for file selection
+            const file = await new Promise((resolve, reject) => {
+                const handleChange = (e) => {
+                    cleanup();
+                    const selectedFile = e.target.files[0];
+                    if (selectedFile) {
+                        resolve(selectedFile);
+                    } else {
+                        reject({ code: 'NO_FILE', message: 'No photo captured' });
+                    }
+                };
+                
+                const cleanup = () => {
+                    fileInput.removeEventListener('change', handleChange);
+                };
+                
+                fileInput.addEventListener('change', handleChange, { once: true });
+                fileInput.click();
+            });
+            
             await processSelectedPhoto(file);
+            
         } catch (error) {
-            if (error.code !== 'CANCELLED') UI.showToast('Failed to capture photo', 'error');
+            if (error.code !== 'CANCELLED' && error.code !== 'NO_FILE') {
+                Config.debug('App', 'Camera capture error:', error);
+                UI.showToast('Failed to capture photo', 'error');
+            }
         }
     }
     
+    /**
+     *Gallery selection 
+     */
     async function handleGallerySelect() {
         try {
-            const file = await Camera.selectFromGallery(UI.elements.photoInput);
+            const fileInput = UI.elements.photoInput;
+            
+            // Reset and configure for gallery
+            fileInput.value = '';
+            fileInput.accept = 'image/*';
+            fileInput.removeAttribute('capture');
+            
+            // Create promise for file selection
+            const file = await new Promise((resolve, reject) => {
+                const handleChange = (e) => {
+                    cleanup();
+                    const selectedFile = e.target.files[0];
+                    if (selectedFile) {
+                        resolve(selectedFile);
+                    } else {
+                        reject({ code: 'NO_FILE', message: 'No image selected' });
+                    }
+                };
+                
+                const cleanup = () => {
+                    fileInput.removeEventListener('change', handleChange);
+                };
+                
+                fileInput.addEventListener('change', handleChange, { once: true });
+                fileInput.click();
+            });
+            
             await processSelectedPhoto(file);
+            
         } catch (error) {
             if (error.code !== 'CANCELLED' && error.code !== 'NO_FILE') {
+                Config.debug('App', 'Gallery select error:', error);
                 UI.showToast(error.message || 'Failed to select photo', 'error');
             }
         }
     }
     
     async function processSelectedPhoto(file) {
+        // Validate
         const validation = Camera.validateImage(file);
         if (!validation.valid) {
             UI.showToast(validation.error, 'error');
@@ -334,11 +427,6 @@ const App = (function() {
     
     function handleStatusChange(event) {
         UI.showMortalitySection(event.target.value === 'dead');
-    }
-    
-    async function requestLocation() {
-        try { await Location.getCurrentPosition(); }
-        catch (error) { Config.debug('App', 'Location error:', error.message); }
     }
     
     async function handleFormSubmit(event) {
@@ -405,7 +493,7 @@ const App = (function() {
             }
         }
         if (!UI.elements.latitude.value || !UI.elements.longitude.value) {
-            errors.location = 'Location required. Please enable location services.';
+            errors.location = 'Location required. Please select a location on the map.';
         }
         
         return errors;
@@ -418,7 +506,6 @@ const App = (function() {
         }
         currentPhotoBlob = null;
         UI.resetForm();
-        requestLocation();
     }
     
     async function updatePendingSyncCount() {
