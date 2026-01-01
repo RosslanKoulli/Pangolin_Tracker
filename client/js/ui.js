@@ -3,6 +3,8 @@
  * UI Module
  * 
  * This module handles all DOM manipulation and user interface updates.
+ * 
+ * UPDATED: Added location picker map functionality
  */
 
 const UI = (function() {
@@ -49,6 +51,9 @@ const UI = (function() {
         notesCount: document.getElementById('notesCount'),
         btnSubmit: document.getElementById('btnSubmit'),
         
+        // Location Picker Map
+        locationPickerMap: document.getElementById('location-picker-map'),
+        
         // Error messages
         statusError: document.getElementById('statusError'),
         mortalityError: document.getElementById('mortalityError'),
@@ -69,9 +74,13 @@ const UI = (function() {
         modalBody: document.getElementById('modalBody')
     };
     
-    // Map instance for analytics
+    // Map instances
     let analyticsMap = null;
     let mapMarkers = [];
+    
+    // Location picker map
+    let locationPickerMap = null;
+    let locationPickerMarker = null;
     
     // ============================================
     // Navigation
@@ -92,6 +101,14 @@ const UI = (function() {
         });
         
         Config.debug('UI', 'Switched to view:', viewName);
+        
+        // Initialize/refresh location picker map when switching to add view
+        if (viewName === 'add') {
+            setTimeout(() => {
+                initLocationPickerMap();
+                refreshLocationPickerMap();
+            }, 100);
+        }
         
         document.dispatchEvent(new CustomEvent('view:changed', { 
             detail: { view: viewName } 
@@ -182,7 +199,7 @@ const UI = (function() {
     
     /**
      * Renders the sightings list
-     * Updates the count display instead of hiding it
+     * UPDATED: Now updates the count display instead of hiding it
      * 
      * @param {Array} sightings - Array of sighting objects
      */
@@ -280,6 +297,185 @@ const UI = (function() {
     }
     
     // ============================================
+    // Location Picker Map
+    // ============================================
+    
+    /**
+     * Initializes the location picker map for the Add Sighting form
+     */
+    function initLocationPickerMap() {
+        // Check if map container exists
+        if (!elements.locationPickerMap) {
+            Config.debug('UI', 'Location picker map container not found');
+            return;
+        }
+        
+        // Check if Leaflet is loaded
+        if (typeof L === 'undefined') {
+            Config.debug('UI', 'Leaflet not loaded, skipping location picker map init');
+            return;
+        }
+        
+        // Don't reinitialize if already exists
+        if (locationPickerMap) {
+            Config.debug('UI', 'Location picker map already initialized');
+            return;
+        }
+        
+        Config.debug('UI', 'Initializing location picker map');
+        
+        // Get default coordinates from Config or use fallback
+        const defaultLat = Config.LOCATION?.DEFAULT_LAT || 50.8225;
+        const defaultLng = Config.LOCATION?.DEFAULT_LNG || -0.1372;
+        const defaultZoom = Config.LOCATION?.DEFAULT_ZOOM || 13;
+        
+        // Initialize the map
+        locationPickerMap = L.map(elements.locationPickerMap, {
+            center: [defaultLat, defaultLng],
+            zoom: defaultZoom,
+            zoomControl: true,
+            attributionControl: true
+        });
+        
+        // Add tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(locationPickerMap);
+        
+        // Add click handler to set location
+        locationPickerMap.on('click', handleMapClick);
+        
+        Config.debug('UI', 'Location picker map initialized');
+    }
+    
+    /**
+     * Handles click on the location picker map
+     */
+    function handleMapClick(e) {
+        const { lat, lng } = e.latlng;
+        
+        // Update form fields
+        elements.latitude.value = lat.toFixed(6);
+        elements.longitude.value = lng.toFixed(6);
+        elements.locationAccuracy.value = '10'; // Manual selection has ~10m accuracy
+        
+        // Update location text display
+        if (elements.locationText) {
+            elements.locationText.textContent = Location.formatCoordinates(lat, lng, 10);
+        }
+        
+        // Clear any location errors
+        if (elements.locationError) {
+            elements.locationError.hidden = true;
+        }
+        
+        // Update or create marker
+        updateLocationPickerMarker(lat, lng);
+        
+        Config.debug('UI', `Location selected: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    }
+    
+    /**
+     * Updates or creates the marker on the location picker map
+     */
+    function updateLocationPickerMarker(lat, lng) {
+        if (!locationPickerMap) return;
+        
+        // Remove existing marker
+        if (locationPickerMarker) {
+            locationPickerMap.removeLayer(locationPickerMarker);
+        }
+        
+        // Create custom icon
+        const markerIcon = L.divIcon({
+            className: 'location-marker',
+            html: '<div style="background: #2E7D32; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
+            iconSize: [26, 26],
+            iconAnchor: [13, 13]
+        });
+        
+        // Add new marker
+        locationPickerMarker = L.marker([lat, lng], { icon: markerIcon })
+            .addTo(locationPickerMap);
+    }
+    
+    /**
+     * Refreshes the location picker map (fixes display issues)
+     */
+    function refreshLocationPickerMap() {
+        if (locationPickerMap) {
+            setTimeout(() => {
+                locationPickerMap.invalidateSize();
+                Config.debug('UI', 'Location picker map refreshed');
+            }, 100);
+        }
+    }
+    
+    /**
+     * Centers the location picker map on user's current location
+     */
+    function centerOnUserLocation() {
+        if (!locationPickerMap) {
+            initLocationPickerMap();
+        }
+        
+        if (!navigator.geolocation) {
+            showToast('Geolocation is not supported by your browser', 'error');
+            return;
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude, accuracy } = position.coords;
+                
+                // Center map on location
+                locationPickerMap.setView([latitude, longitude], 16);
+                
+                // Update form and marker
+                elements.latitude.value = latitude.toFixed(6);
+                elements.longitude.value = longitude.toFixed(6);
+                elements.locationAccuracy.value = accuracy.toFixed(0);
+                
+                // Update location text
+                if (elements.locationText) {
+                    elements.locationText.textContent = Location.formatCoordinates(latitude, longitude, accuracy);
+                }
+                
+                // Clear errors
+                if (elements.locationError) {
+                    elements.locationError.hidden = true;
+                }
+                
+                // Update marker
+                updateLocationPickerMarker(latitude, longitude);
+                
+                showToast('Location updated', 'success');
+            },
+            (error) => {
+                let message = 'Could not get your location';
+                switch (error.code) {
+                    case error.PERMISSION_DENIED:
+                        message = 'Location permission denied';
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        message = 'Location unavailable';
+                        break;
+                    case error.TIMEOUT:
+                        message = 'Location request timed out';
+                        break;
+                }
+                showToast(message, 'error');
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 60000
+            }
+        );
+    }
+    
+    // ============================================
     // Form Handling
     // ============================================
     
@@ -289,11 +485,11 @@ const UI = (function() {
         if (url) {
             elements.previewImage.src = url;
             elements.previewImage.hidden = false;
-            placeholder.hidden = true;
+            if (placeholder) placeholder.hidden = true;
         } else {
             elements.previewImage.src = '';
             elements.previewImage.hidden = true;
-            placeholder.hidden = false;
+            if (placeholder) placeholder.hidden = false;
         }
     }
     
@@ -309,7 +505,7 @@ const UI = (function() {
     function updateLocationDisplay(data) {
         if (data.status === 'acquiring') {
             elements.locationText.textContent = 'Acquiring location...';
-            elements.btnRefreshLocation.disabled = true;
+            if (elements.btnRefreshLocation) elements.btnRefreshLocation.disabled = true;
             elements.locationError.hidden = true;
         } else if (data.status === 'acquired') {
             const pos = data.position.coords;
@@ -321,11 +517,17 @@ const UI = (function() {
             elements.latitude.value = pos.latitude;
             elements.longitude.value = pos.longitude;
             elements.locationAccuracy.value = pos.accuracy;
-            elements.btnRefreshLocation.disabled = false;
+            if (elements.btnRefreshLocation) elements.btnRefreshLocation.disabled = false;
             elements.locationError.hidden = true;
+            
+            // Also update the map marker
+            if (locationPickerMap) {
+                locationPickerMap.setView([pos.latitude, pos.longitude], 16);
+                updateLocationPickerMarker(pos.latitude, pos.longitude);
+            }
         } else if (data.status === 'error') {
             elements.locationText.textContent = 'Location unavailable';
-            elements.btnRefreshLocation.disabled = false;
+            if (elements.btnRefreshLocation) elements.btnRefreshLocation.disabled = false;
             elements.locationError.textContent = data.error.message;
             elements.locationError.hidden = false;
         }
@@ -350,8 +552,8 @@ const UI = (function() {
         const btnLoading = elements.btnSubmit.querySelector('.btn-loading');
         
         elements.btnSubmit.disabled = loading;
-        btnText.hidden = loading;
-        btnLoading.hidden = !loading;
+        if (btnText) btnText.hidden = loading;
+        if (btnLoading) btnLoading.hidden = !loading;
     }
     
     function resetForm() {
@@ -363,6 +565,17 @@ const UI = (function() {
         elements.latitude.value = '';
         elements.longitude.value = '';
         elements.locationAccuracy.value = '';
+        
+        // Reset location picker marker
+        if (locationPickerMarker && locationPickerMap) {
+            locationPickerMap.removeLayer(locationPickerMarker);
+            locationPickerMarker = null;
+        }
+        
+        // Reset location text
+        if (elements.locationText) {
+            elements.locationText.textContent = 'Tap the map to set location';
+        }
     }
     
     // ============================================
@@ -676,6 +889,11 @@ const UI = (function() {
         showSightingsLoading,
         hideSightingsLoading,
         updateSightingCountDisplay,
+        
+        // Location Picker Map
+        initLocationPickerMap,
+        refreshLocationPickerMap,
+        centerOnUserLocation,
         
         // Form
         updatePhotoPreview,
