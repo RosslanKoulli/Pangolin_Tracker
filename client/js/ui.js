@@ -3,8 +3,17 @@
  * UI Module
  * 
  * This module handles all DOM manipulation and user interface updates.
+ * It provides a clean separation between business logic and presentation.
  * 
- * UPDATED: Added location picker map functionality
+ * Architecture Pattern:
+ * - Uses a simple publish-subscribe pattern for UI updates
+ * - Implements template-based rendering for list items
+ * - Manages modals, toasts, and other UI components
+ * 
+ * Accessibility:
+ * - ARIA attributes are managed dynamically
+ * - Focus management for modals and notifications
+ * - Screen reader announcements for important updates
  */
 
 const UI = (function() {
@@ -42,17 +51,16 @@ const UI = (function() {
         btnCamera: document.getElementById('btnCamera'),
         btnGallery: document.getElementById('btnGallery'),
         mortalitySection: document.getElementById('mortalitySection'),
+        locationMapContainer: document.getElementById('locationMapContainer'),
+        locationMap: document.getElementById('locationMap'),
         locationText: document.getElementById('locationText'),
-        btnRefreshLocation: document.getElementById('btnRefreshLocation'),
+        btnMyLocation: document.getElementById('btnMyLocation'),
         latitude: document.getElementById('latitude'),
         longitude: document.getElementById('longitude'),
         locationAccuracy: document.getElementById('locationAccuracy'),
         notes: document.getElementById('notes'),
         notesCount: document.getElementById('notesCount'),
         btnSubmit: document.getElementById('btnSubmit'),
-        
-        // Location Picker Map
-        locationPickerMap: document.getElementById('location-picker-map'),
         
         // Error messages
         statusError: document.getElementById('statusError'),
@@ -76,17 +84,22 @@ const UI = (function() {
     
     // Map instances
     let analyticsMap = null;
-    let mapMarkers = [];
-    
-    // Location picker map
     let locationPickerMap = null;
-    let locationPickerMarker = null;
+    let locationMarker = null;
+    let mapMarkers = [];
     
     // ============================================
     // Navigation
     // ============================================
     
+    /**
+     * Switches to a different view
+     * Updates tab states and manages view visibility
+     * 
+     * @param {string} viewName - 'sightings', 'add', or 'analytics'
+     */
     function switchView(viewName) {
+        // Update tabs
         const tabs = [elements.tabSightings, elements.tabAdd, elements.tabAnalytics];
         const views = [elements.viewSightings, elements.viewAdd, elements.viewAnalytics];
         
@@ -102,14 +115,7 @@ const UI = (function() {
         
         Config.debug('UI', 'Switched to view:', viewName);
         
-        // Initialize/refresh location picker map when switching to add view
-        if (viewName === 'add') {
-            setTimeout(() => {
-                initLocationPickerMap();
-                refreshLocationPickerMap();
-            }, 100);
-        }
-        
+        // Trigger view-specific initialization
         document.dispatchEvent(new CustomEvent('view:changed', { 
             detail: { view: viewName } 
         }));
@@ -123,6 +129,11 @@ const UI = (function() {
     // Connection Status
     // ============================================
     
+    /**
+     * Updates the connection status indicator
+     * 
+     * @param {boolean} isOnline - Whether the app is online
+     */
     function updateConnectionStatus(isOnline) {
         const statusDot = elements.connectionStatus.querySelector('.status-dot');
         const statusText = elements.connectionStatus.querySelector('.status-text');
@@ -134,6 +145,11 @@ const UI = (function() {
         Config.debug('UI', 'Connection status:', isOnline ? 'Online' : 'Offline');
     }
     
+    /**
+     * Updates the pending sync count badge
+     * 
+     * @param {number} count - Number of pending syncs
+     */
     function updatePendingCount(count) {
         elements.pendingCount.textContent = count;
         elements.pendingCount.hidden = count === 0;
@@ -145,6 +161,11 @@ const UI = (function() {
         }
     }
     
+    /**
+     * Shows/hides sync animation
+     * 
+     * @param {boolean} syncing - Whether sync is in progress
+     */
     function setSyncing(syncing) {
         elements.syncBtn.classList.toggle('syncing', syncing);
         elements.syncBtn.disabled = syncing;
@@ -155,73 +176,29 @@ const UI = (function() {
     // ============================================
     
     /**
-     * Updates the sighting count display area
-     * Shows different content based on whether there are sightings or not
-     * 
-     * @param {number} count - Number of sightings
-     */
-    function updateSightingCountDisplay(count) {
-        const emptyState = elements.sightingsEmpty;
-        
-        // Always show this section (never hide it)
-        emptyState.hidden = false;
-        
-        if (count === 0) {
-            // No sightings - show empty state message
-            emptyState.innerHTML = `
-                <div class="empty-illustration" aria-hidden="true">🦔</div>
-                <h3>No Sightings Yet</h3>
-                <p>Be the first to record a pangolin sighting in your area!</p>
-                <button class="btn btn-primary" data-action="go-to-add">
-                    Record Sighting
-                </button>
-            `;
-        } else {
-            // Has sightings - show count message
-            const sightingWord = count === 1 ? 'sighting has' : 'sightings have';
-            emptyState.innerHTML = `
-                <div class="empty-illustration" aria-hidden="true">🦔</div>
-                <h3>${count} Pangolin ${sightingWord} been recorded</h3>
-                <button class="btn btn-primary" data-action="go-to-add">
-                    Record Sighting
-                </button>
-            `;
-        }
-        
-        // Re-attach click handler for the button
-        const goToAddBtn = emptyState.querySelector('[data-action="go-to-add"]');
-        if (goToAddBtn) {
-            goToAddBtn.addEventListener('click', () => {
-                switchView('add');
-            });
-        }
-    }
-    
-    /**
      * Renders the sightings list
-     * UPDATED: Now updates the count display instead of hiding it
      * 
      * @param {Array} sightings - Array of sighting objects
      */
     function renderSightings(sightings) {
-        // Hide loading state
         elements.sightingsLoading.hidden = true;
         
-        const count = sightings ? sightings.length : 0;
-        
-        // Update the count display (this replaces the old show/hide logic)
-        updateSightingCountDisplay(count);
-        
-        if (count === 0) {
+        if (!sightings || sightings.length === 0) {
+            // No sightings so show empty state and hide list
+            elements.sightingsEmpty.hidden = false;
             elements.sightingsList.innerHTML = '';
-            return;
+
+        } else {
+            // Has sighting so hide empty state and show list
+            elements.sightingsEmpty.hidden = true;
+            const html = sightings.map(sighting => createSightingCard(sighting)).join('');
+            elements.sightingsList.innerHTML = html;
         }
         
-        // Render the sighting cards
-        const html = sightings.map(sighting => createSightingCard(sighting)).join('');
-        elements.sightingsList.innerHTML = html;
+
+
         
-        Config.debug('UI', `Rendered ${count} sightings`);
+        Config.debug('UI', `Rendered ${sightings ? sightings.length:0} sightings`);
     }
     
     /**
@@ -232,14 +209,19 @@ const UI = (function() {
         elements.sightingsEmpty.hidden = true;
         elements.sightingsList.innerHTML = '';
     }
-    
+
     /**
-     * Hides the loading state
+     * Hides the loading state(calling this after the data loads)
      */
-    function hideSightingsLoading() {
-        elements.sightingsLoading.hidden = true;
+    function hidesSightingsLoading() {
+        elements.sightingsLoading.hidden =true;
     }
-    
+    /**
+     * Creates HTML for a sighting card
+     * 
+     * @param {Object} sighting - The sighting data
+     * @returns {string} HTML string
+     */
     function createSightingCard(sighting) {
         const date = new Date(sighting.recordedAt);
         const formattedDate = formatDate(date);
@@ -297,246 +279,186 @@ const UI = (function() {
     }
     
     // ============================================
-    // Location Picker Map
-    // ============================================
-    
-    /**
-     * Initializes the location picker map for the Add Sighting form
-     */
-    function initLocationPickerMap() {
-        // Check if map container exists
-        if (!elements.locationPickerMap) {
-            Config.debug('UI', 'Location picker map container not found');
-            return;
-        }
-        
-        // Check if Leaflet is loaded
-        if (typeof L === 'undefined') {
-            Config.debug('UI', 'Leaflet not loaded, skipping location picker map init');
-            return;
-        }
-        
-        // Don't reinitialize if already exists
-        if (locationPickerMap) {
-            Config.debug('UI', 'Location picker map already initialized');
-            return;
-        }
-        
-        Config.debug('UI', 'Initializing location picker map');
-        
-        // Get default coordinates from Config or use fallback
-        const defaultLat = Config.LOCATION?.DEFAULT_LAT || 50.8225;
-        const defaultLng = Config.LOCATION?.DEFAULT_LNG || -0.1372;
-        const defaultZoom = Config.LOCATION?.DEFAULT_ZOOM || 13;
-        
-        // Initialize the map
-        locationPickerMap = L.map(elements.locationPickerMap, {
-            center: [defaultLat, defaultLng],
-            zoom: defaultZoom,
-            zoomControl: true,
-            attributionControl: true
-        });
-        
-        // Add tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 19
-        }).addTo(locationPickerMap);
-        
-        // Add click handler to set location
-        locationPickerMap.on('click', handleMapClick);
-        
-        Config.debug('UI', 'Location picker map initialized');
-    }
-    
-    /**
-     * Handles click on the location picker map
-     */
-    function handleMapClick(e) {
-        const { lat, lng } = e.latlng;
-        
-        // Update form fields
-        elements.latitude.value = lat.toFixed(6);
-        elements.longitude.value = lng.toFixed(6);
-        elements.locationAccuracy.value = '10'; // Manual selection has ~10m accuracy
-        
-        // Update location text display
-        if (elements.locationText) {
-            elements.locationText.textContent = Location.formatCoordinates(lat, lng, 10);
-        }
-        
-        // Clear any location errors
-        if (elements.locationError) {
-            elements.locationError.hidden = true;
-        }
-        
-        // Update or create marker
-        updateLocationPickerMarker(lat, lng);
-        
-        Config.debug('UI', `Location selected: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-    }
-    
-    /**
-     * Updates or creates the marker on the location picker map
-     */
-    function updateLocationPickerMarker(lat, lng) {
-        if (!locationPickerMap) return;
-        
-        // Remove existing marker
-        if (locationPickerMarker) {
-            locationPickerMap.removeLayer(locationPickerMarker);
-        }
-        
-        // Create custom icon
-        const markerIcon = L.divIcon({
-            className: 'location-marker',
-            html: '<div style="background: #2E7D32; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
-            iconSize: [26, 26],
-            iconAnchor: [13, 13]
-        });
-        
-        // Add new marker
-        locationPickerMarker = L.marker([lat, lng], { icon: markerIcon })
-            .addTo(locationPickerMap);
-    }
-    
-    /**
-     * Refreshes the location picker map (fixes display issues)
-     */
-    function refreshLocationPickerMap() {
-        if (locationPickerMap) {
-            setTimeout(() => {
-                locationPickerMap.invalidateSize();
-                Config.debug('UI', 'Location picker map refreshed');
-            }, 100);
-        }
-    }
-    
-    /**
-     * Centers the location picker map on user's current location
-     */
-    function centerOnUserLocation() {
-        if (!locationPickerMap) {
-            initLocationPickerMap();
-        }
-        
-        if (!navigator.geolocation) {
-            showToast('Geolocation is not supported by your browser', 'error');
-            return;
-        }
-        
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const { latitude, longitude, accuracy } = position.coords;
-                
-                // Center map on location
-                locationPickerMap.setView([latitude, longitude], 16);
-                
-                // Update form and marker
-                elements.latitude.value = latitude.toFixed(6);
-                elements.longitude.value = longitude.toFixed(6);
-                elements.locationAccuracy.value = accuracy.toFixed(0);
-                
-                // Update location text
-                if (elements.locationText) {
-                    elements.locationText.textContent = Location.formatCoordinates(latitude, longitude, accuracy);
-                }
-                
-                // Clear errors
-                if (elements.locationError) {
-                    elements.locationError.hidden = true;
-                }
-                
-                // Update marker
-                updateLocationPickerMarker(latitude, longitude);
-                
-                showToast('Location updated', 'success');
-            },
-            (error) => {
-                let message = 'Could not get your location';
-                switch (error.code) {
-                    case error.PERMISSION_DENIED:
-                        message = 'Location permission denied';
-                        break;
-                    case error.POSITION_UNAVAILABLE:
-                        message = 'Location unavailable';
-                        break;
-                    case error.TIMEOUT:
-                        message = 'Location request timed out';
-                        break;
-                }
-                showToast(message, 'error');
-            },
-            {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 60000
-            }
-        );
-    }
-    
-    // ============================================
     // Form Handling
     // ============================================
     
+    /**
+     * Updates the photo preview
+     * 
+     * @param {string|null} url - The image URL or null to clear
+     */
     function updatePhotoPreview(url) {
         const placeholder = elements.photoPreview.querySelector('.photo-placeholder');
         
         if (url) {
             elements.previewImage.src = url;
             elements.previewImage.hidden = false;
-            if (placeholder) placeholder.hidden = true;
+            placeholder.hidden = true;
         } else {
             elements.previewImage.src = '';
             elements.previewImage.hidden = true;
-            if (placeholder) placeholder.hidden = false;
+            placeholder.hidden = false;
         }
     }
     
+    /**
+     * Shows/hides the mortality type selection
+     * 
+     * @param {boolean} show - Whether to show the section
+     */
     function showMortalitySection(show) {
         elements.mortalitySection.hidden = !show;
         
         if (!show) {
+            // Clear selection when hiding
             const radios = elements.mortalitySection.querySelectorAll('input[type="radio"]');
             radios.forEach(radio => radio.checked = false);
         }
     }
     
-    function updateLocationDisplay(data) {
-        if (data.status === 'acquiring') {
-            elements.locationText.textContent = 'Acquiring location...';
-            if (elements.btnRefreshLocation) elements.btnRefreshLocation.disabled = true;
-            elements.locationError.hidden = true;
-        } else if (data.status === 'acquired') {
-            const pos = data.position.coords;
-            elements.locationText.textContent = Location.formatCoordinates(
-                pos.latitude, 
-                pos.longitude, 
-                pos.accuracy
-            );
-            elements.latitude.value = pos.latitude;
-            elements.longitude.value = pos.longitude;
-            elements.locationAccuracy.value = pos.accuracy;
-            if (elements.btnRefreshLocation) elements.btnRefreshLocation.disabled = false;
-            elements.locationError.hidden = true;
-            
-            // Also update the map marker
-            if (locationPickerMap) {
-                locationPickerMap.setView([pos.latitude, pos.longitude], 16);
-                updateLocationPickerMarker(pos.latitude, pos.longitude);
-            }
-        } else if (data.status === 'error') {
-            elements.locationText.textContent = 'Location unavailable';
-            if (elements.btnRefreshLocation) elements.btnRefreshLocation.disabled = false;
-            elements.locationError.textContent = data.error.message;
-            elements.locationError.hidden = false;
+    /**
+     * Initializes the location picker map
+     */
+    function initLocationPickerMap() {
+        if (locationPickerMap) return locationPickerMap;
+        
+        if (typeof L === 'undefined') {
+            Config.debug('UI', 'Leaflet not loaded, skipping location map init');
+            return null;
+        }
+        
+        // Default to a central location (can be overridden)
+        const defaultLat = Config.LOCATION.DEFAULT_LAT || 51.5;
+        const defaultLng = Config.LOCATION.DEFAULT_LNG || -0.1;
+        const defaultZoom = 10;
+        
+        locationPickerMap = L.map(elements.locationMap, {
+            center: [defaultLat, defaultLng],
+            zoom: defaultZoom,
+            zoomControl: true
+        });
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap',
+            maxZoom: 18
+        }).addTo(locationPickerMap);
+        
+        // Click handler to place marker
+        locationPickerMap.on('click', function(e) {
+            setLocationMarker(e.latlng.lat, e.latlng.lng);
+        });
+        
+        Config.debug('UI', 'Location picker map initialized');
+        return locationPickerMap;
+    }
+    
+    /**
+     * Sets the location marker on the map
+     * 
+     * @param {number} lat - Latitude
+     * @param {number} lng - Longitude
+     * @param {number} accuracy - Optional accuracy in meters
+     */
+    function setLocationMarker(lat, lng, accuracy = null) {
+        if (!locationPickerMap) {
+            initLocationPickerMap();
+        }
+        
+        // Remove existing marker
+        if (locationMarker) {
+            locationPickerMap.removeLayer(locationMarker);
+        }
+        
+        // Create custom icon
+        const markerIcon = L.divIcon({
+            className: 'location-marker',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+        });
+        
+        // Add new marker
+        locationMarker = L.marker([lat, lng], { icon: markerIcon }).addTo(locationPickerMap);
+        
+        // Update form fields
+        elements.latitude.value = lat;
+        elements.longitude.value = lng;
+        elements.locationAccuracy.value = accuracy || '';
+        
+        // Update display text
+        elements.locationText.textContent = Location.formatCoordinates(lat, lng, accuracy);
+        
+        // Add visual feedback
+        elements.locationMapContainer.classList.add('has-location');
+        elements.locationError.hidden = true;
+        
+        // Center map on marker
+        locationPickerMap.setView([lat, lng], Math.max(locationPickerMap.getZoom(), 13));
+        
+        Config.debug('UI', `Location set: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+    }
+    
+    /**
+     * Refreshes the location picker map (call when view becomes visible)
+     */
+    function refreshLocationPickerMap() {
+        if (locationPickerMap) {
+            setTimeout(() => {
+                locationPickerMap.invalidateSize();
+            }, 100);
         }
     }
     
+    /**
+     * Clears the location marker
+     */
+    function clearLocationMarker() {
+        if (locationMarker && locationPickerMap) {
+            locationPickerMap.removeLayer(locationMarker);
+            locationMarker = null;
+        }
+        
+        elements.latitude.value = '';
+        elements.longitude.value = '';
+        elements.locationAccuracy.value = '';
+        elements.locationText.textContent = 'Tap the map to set location';
+        elements.locationMapContainer.classList.remove('has-location');
+    }
+    
+    /**
+     * Updates the location display (legacy support)
+     * 
+     * @param {Object} data - Location data or status
+     */
+    function updateLocationDisplay(data) {
+        if (data.status === 'acquiring') {
+            elements.locationText.textContent = 'Getting your location...';
+            if (elements.btnMyLocation) elements.btnMyLocation.disabled = true;
+            elements.locationError.hidden = true;
+        } else if (data.status === 'acquired') {
+            const pos = data.position.coords;
+            setLocationMarker(pos.latitude, pos.longitude, pos.accuracy);
+            if (elements.btnMyLocation) elements.btnMyLocation.disabled = false;
+        } else if (data.status === 'error') {
+            elements.locationText.textContent = 'Tap the map to set location';
+            if (elements.btnMyLocation) elements.btnMyLocation.disabled = false;
+            // Don't show error for map-based selection
+        }
+    }
+    
+    /**
+     * Updates the character count for notes
+     * 
+     * @param {number} count - Current character count
+     */
     function updateNotesCount(count) {
         elements.notesCount.textContent = count;
     }
     
+    /**
+     * Shows/hides form validation errors
+     * 
+     * @param {Object} errors - Object with field names as keys
+     */
     function showFormErrors(errors) {
         elements.statusError.hidden = !errors.status;
         elements.mortalityError.hidden = !errors.mortality;
@@ -547,41 +469,41 @@ const UI = (function() {
         }
     }
     
+    /**
+     * Sets the submit button loading state
+     * 
+     * @param {boolean} loading - Whether submission is in progress
+     */
     function setSubmitLoading(loading) {
         const btnText = elements.btnSubmit.querySelector('.btn-text');
         const btnLoading = elements.btnSubmit.querySelector('.btn-loading');
         
         elements.btnSubmit.disabled = loading;
-        if (btnText) btnText.hidden = loading;
-        if (btnLoading) btnLoading.hidden = !loading;
+        btnText.hidden = loading;
+        btnLoading.hidden = !loading;
     }
     
+    /**
+     * Resets the form to initial state
+     */
     function resetForm() {
         elements.sightingForm.reset();
         updatePhotoPreview(null);
         showMortalitySection(false);
         showFormErrors({});
         updateNotesCount(0);
-        elements.latitude.value = '';
-        elements.longitude.value = '';
-        elements.locationAccuracy.value = '';
-        
-        // Reset location picker marker
-        if (locationPickerMarker && locationPickerMap) {
-            locationPickerMap.removeLayer(locationPickerMarker);
-            locationPickerMarker = null;
-        }
-        
-        // Reset location text
-        if (elements.locationText) {
-            elements.locationText.textContent = 'Tap the map to set location';
-        }
+        clearLocationMarker();
     }
     
     // ============================================
     // Analytics
     // ============================================
     
+    /**
+     * Updates the analytics summary statistics
+     * 
+     * @param {Object} stats - Statistics object
+     */
     function updateAnalyticsStats(stats) {
         elements.statTotal.textContent = stats.total ?? '-';
         elements.statAlive.textContent = stats.alive ?? '-';
@@ -589,6 +511,11 @@ const UI = (function() {
         elements.statRecent.textContent = stats.recent ?? '-';
     }
     
+    /**
+     * Renders the mortality breakdown chart
+     * 
+     * @param {Array} data - Mortality statistics
+     */
     function renderMortalityChart(data) {
         if (!data || data.length === 0) {
             elements.mortalityBars.innerHTML = '<p>No mortality data available</p>';
@@ -615,9 +542,13 @@ const UI = (function() {
         elements.mortalityBars.innerHTML = html;
     }
     
+    /**
+     * Initializes the analytics map
+     */
     function initAnalyticsMap() {
-        if (analyticsMap) return;
+        if (analyticsMap) return; // Already initialized
         
+        // Check if Leaflet is available
         if (typeof L === 'undefined') {
             Config.debug('UI', 'Leaflet not loaded, skipping map init');
             return;
@@ -638,11 +569,17 @@ const UI = (function() {
         Config.debug('UI', 'Analytics map initialized');
     }
     
+    /**
+     * Updates the map with sighting locations
+     * 
+     * @param {Array} locations - Array of {lat, lng, status} objects
+     */
     function updateMapMarkers(locations) {
         if (!analyticsMap) {
             initAnalyticsMap();
         }
         
+        // Clear existing markers
         mapMarkers.forEach(marker => analyticsMap.removeLayer(marker));
         mapMarkers = [];
         
@@ -675,6 +612,7 @@ const UI = (function() {
             bounds.push([loc.lat, loc.lng]);
         });
         
+        // Fit map to markers
         if (bounds.length > 0) {
             analyticsMap.fitBounds(bounds, { padding: [20, 20] });
         }
@@ -682,6 +620,9 @@ const UI = (function() {
         Config.debug('UI', `Added ${locations.length} map markers`);
     }
     
+    /**
+     * Invalidates map size (call after view becomes visible)
+     */
     function refreshMap() {
         if (analyticsMap) {
             setTimeout(() => {
@@ -694,6 +635,13 @@ const UI = (function() {
     // Toast Notifications
     // ============================================
     
+    /**
+     * Shows a toast notification
+     * 
+     * @param {string} message - The message to display
+     * @param {string} type - 'success', 'error', 'warning', or 'info'
+     * @param {number} duration - How long to show (ms)
+     */
     function showToast(message, type = 'info', duration = Config.UI.TOAST_DURATION) {
         const icons = {
             success: '✓',
@@ -710,19 +658,27 @@ const UI = (function() {
             <button class="toast-close" aria-label="Dismiss">×</button>
         `;
         
+        // Add close handler
         toast.querySelector('.toast-close').addEventListener('click', () => {
             removeToast(toast);
         });
         
         elements.toastContainer.appendChild(toast);
         
+        // Auto-remove after duration
         setTimeout(() => removeToast(toast), duration);
         
+        // Announce to screen readers
         announceToScreenReader(message);
         
         Config.debug('UI', `Toast shown: ${type} - ${message}`);
     }
     
+    /**
+     * Removes a toast with animation
+     * 
+     * @param {HTMLElement} toast - The toast element
+     */
     function removeToast(toast) {
         toast.style.opacity = '0';
         toast.style.transform = 'translateY(100%)';
@@ -738,6 +694,11 @@ const UI = (function() {
     // Modal
     // ============================================
     
+    /**
+     * Opens the sighting detail modal
+     * 
+     * @param {Object} sighting - The sighting data
+     */
     function openSightingModal(sighting) {
         const date = new Date(sighting.recordedAt);
         const mortalityType = sighting.mortalityType ? 
@@ -805,6 +766,9 @@ const UI = (function() {
         elements.sightingModal.showModal();
     }
     
+    /**
+     * Closes the sighting modal
+     */
     function closeSightingModal() {
         elements.sightingModal.close();
     }
@@ -813,6 +777,12 @@ const UI = (function() {
     // Utility Functions
     // ============================================
     
+    /**
+     * Escapes HTML to prevent XSS
+     * 
+     * @param {string} str - The string to escape
+     * @returns {string} Escaped string
+     */
     function escapeHtml(str) {
         if (!str) return '';
         const div = document.createElement('div');
@@ -820,10 +790,17 @@ const UI = (function() {
         return div.innerHTML;
     }
     
+    /**
+     * Formats a date for display
+     * 
+     * @param {Date} date - The date to format
+     * @returns {string} Formatted date string
+     */
     function formatDate(date) {
         const now = new Date();
         const diff = now - date;
         
+        // Less than 24 hours
         if (diff < 86400000) {
             if (diff < 3600000) {
                 const mins = Math.floor(diff / 60000);
@@ -833,11 +810,13 @@ const UI = (function() {
             return `${hours} hour${hours > 1 ? 's' : ''} ago`;
         }
         
+        // Less than 7 days
         if (diff < 604800000) {
             const days = Math.floor(diff / 86400000);
             return `${days} day${days > 1 ? 's' : ''} ago`;
         }
         
+        // Otherwise, show date
         return date.toLocaleDateString(undefined, {
             year: 'numeric',
             month: 'short',
@@ -845,6 +824,12 @@ const UI = (function() {
         });
     }
     
+    /**
+     * Formats a date and time for display
+     * 
+     * @param {Date} date - The date to format
+     * @returns {string} Formatted date/time string
+     */
     function formatDateTime(date) {
         return date.toLocaleString(undefined, {
             year: 'numeric',
@@ -855,6 +840,11 @@ const UI = (function() {
         });
     }
     
+    /**
+     * Announces a message to screen readers
+     * 
+     * @param {string} message - The message to announce
+     */
     function announceToScreenReader(message) {
         const announcement = document.createElement('div');
         announcement.setAttribute('role', 'status');
@@ -874,6 +864,7 @@ const UI = (function() {
     // Public API
     // ============================================
     return {
+        // Elements (for direct access if needed)
         elements,
         
         // Navigation
@@ -887,13 +878,7 @@ const UI = (function() {
         // Sightings
         renderSightings,
         showSightingsLoading,
-        hideSightingsLoading,
-        updateSightingCountDisplay,
-        
-        // Location Picker Map
-        initLocationPickerMap,
-        refreshLocationPickerMap,
-        centerOnUserLocation,
+        hidesSightingsLoading,
         
         // Form
         updatePhotoPreview,
@@ -903,6 +888,12 @@ const UI = (function() {
         showFormErrors,
         setSubmitLoading,
         resetForm,
+        
+        // Location Map Picker
+        initLocationPickerMap,
+        setLocationMarker,
+        clearLocationMarker,
+        refreshLocationPickerMap,
         
         // Analytics
         updateAnalyticsStats,
