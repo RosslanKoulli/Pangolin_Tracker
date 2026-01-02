@@ -123,9 +123,13 @@ const App = (function() {
             }
             
             for (const sighting of sightings) {
-                if (sighting.hasImage && !sighting.synced) {
+                if (sighting.hasImage) {
+                    // Always try local image first, fall back to server URL
                     const blob = await Database.getImage(sighting.clientId);
-                    if (blob) sighting.thumbnailUrl = URL.createObjectURL(blob);
+                    if (blob) {
+                        sighting.thumbnailUrl = URL.createObjectURL(blob);
+                    }
+                    // If no local blob, thumbnailUrl may already be set from server
                 }
             }
             
@@ -283,11 +287,25 @@ const App = (function() {
         const card = event.target.closest('.sighting-card');
         if (!card) return;
         
-        const sighting = await Database.getSighting(card.dataset.clientId);
+        const clientId = card.dataset.clientId;
+        
+        // First check cached sightings (includes server-only sightings from other devices)
+        let sighting = UI.getCachedSighting(clientId);
+        
+        // If not in cache, try local database
+        if (!sighting) {
+            sighting = await Database.getSighting(clientId);
+        }
+        
         if (sighting) {
-            if (sighting.hasImage && !sighting.synced) {
+            // Try to load local image from IndexedDB if available
+            if (sighting.hasImage) {
                 const blob = await Database.getImage(sighting.clientId);
-                if (blob) sighting.imageUrl = URL.createObjectURL(blob);
+                if (blob) {
+                    // Local image found - use it
+                    sighting.imageUrl = URL.createObjectURL(blob);
+                }
+                // If no local blob, imageUrl should already be set from server
             }
             UI.openSightingModal(sighting);
         }

@@ -44,37 +44,23 @@ const Camera = (function() {
             fileInput.accept = 'image/*';
             fileInput.capture = 'environment'; // Prefer rear camera
             
+            // Reset input first to ensure change event fires even for same file
+            fileInput.value = '';
+            
             const handleChange = (event) => {
-                cleanup();
+                fileInput.removeEventListener('change', handleChange);
                 const file = event.target.files[0];
                 
                 if (file) {
                     Config.debug('Camera', 'Photo captured:', file.name, `(${(file.size / 1024).toFixed(1)} KB)`);
                     resolve(file);
                 } else {
-                    reject(new CameraError('No photo captured', 'NO_FILE'));
+                    // No file selected (user cancelled)
+                    reject(new CameraError('Camera cancelled', 'CANCELLED'));
                 }
             };
             
-            const handleCancel = () => {
-                cleanup();
-                reject(new CameraError('Camera cancelled', 'CANCELLED'));
-            };
-            
-            const cleanup = () => {
-                fileInput.removeEventListener('change', handleChange);
-                window.removeEventListener('focus', handleCancel);
-                fileInput.value = ''; // Reset for next use
-            };
-            
             fileInput.addEventListener('change', handleChange);
-            
-            // Detect cancel by checking if focus returns without a file
-            // This is a workaround since there's no cancel event
-            setTimeout(() => {
-                window.addEventListener('focus', handleCancel, { once: true });
-            }, 500);
-            
             fileInput.click();
         });
     }
@@ -91,8 +77,11 @@ const Camera = (function() {
             fileInput.accept = 'image/*';
             fileInput.removeAttribute('capture');
             
+            // Reset input first to ensure change event fires even for same file
+            fileInput.value = '';
+            
             const handleChange = (event) => {
-                cleanup();
+                fileInput.removeEventListener('change', handleChange);
                 const file = event.target.files[0];
                 
                 if (file) {
@@ -108,13 +97,8 @@ const Camera = (function() {
                     Config.debug('Camera', 'Image selected:', file.name, `(${(file.size / 1024).toFixed(1)} KB)`);
                     resolve(file);
                 } else {
-                    reject(new CameraError('No image selected', 'NO_FILE'));
+                    reject(new CameraError('No image selected', 'CANCELLED'));
                 }
-            };
-            
-            const cleanup = () => {
-                fileInput.removeEventListener('change', handleChange);
-                fileInput.value = '';
             };
             
             fileInput.addEventListener('change', handleChange);

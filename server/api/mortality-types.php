@@ -27,10 +27,10 @@ try {
     
     // Add icons (matching frontend config)
     $icons = [
-        'fence_electrocution' => 'Add Lightning/Electrocution image',
-        'fence_non_electric' => 'Add fence chain image',
-        'road_death' => 'Add car for road death image',
-        'other' => '❓'
+        'fence_electrocution' => '//electrocution icon\\',
+        'fence_non_electric' => '//fence icon\\',
+        'road_death' => '//road icon\\',
+        'other' => '//other icon\\'
     ];
     
     $types = array_map(function($type) use ($icons) {
@@ -38,7 +38,7 @@ try {
             'id' => (int) $type['id'],
             'code' => $type['code'],
             'description' => $type['description'],
-            'icon' => $icons[$type['code']] ?? '❓'
+            'icon' => $icons[$type['code']] ?? '//other icon\\'
         ];
     }, $types);
     

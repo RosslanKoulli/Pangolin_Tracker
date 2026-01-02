@@ -88,6 +88,9 @@ const UI = (function() {
     let locationMarker = null;
     let mapMarkers = [];
     
+    // Cache sightings for modal access (includes server-only sightings)
+    let cachedSightings = [];
+    
     // ============================================
     // Navigation
     // ============================================
@@ -176,6 +179,49 @@ const UI = (function() {
     // ============================================
     
     /**
+     * Updates the sighting count display area
+     * Shows pangolin with count message
+     * 
+     * @param {number} count - Number of sightings
+     */
+    function updateSightingCountDisplay(count) {
+        const emptyState = elements.sightingsEmpty;
+        
+        // Always show this section
+        emptyState.hidden = false;
+        
+        if (count === 0) {
+            // No sightings - show empty state message
+            emptyState.innerHTML = `
+                <div class="empty-illustration" aria-hidden="true">//pangolin icon\\</div>
+                <h3>No Sightings Yet</h3>
+                <p>Be the first to record a pangolin sighting in your area!</p>
+                <button class="btn btn-primary" data-action="go-to-add">
+                    Record Sighting
+                </button>
+            `;
+        } else {
+            // Has sightings - show count message
+            const sightingWord = count === 1 ? 'sighting has' : 'sightings have';
+            emptyState.innerHTML = `
+                <div class="empty-illustration" aria-hidden="true">//pangolin icon\\</div>
+                <h3>${count} Pangolin ${sightingWord} been recorded</h3>
+                <button class="btn btn-primary" data-action="go-to-add">
+                    Record Sighting
+                </button>
+            `;
+        }
+        
+        // Re-attach click handler for the button
+        const goToAddBtn = emptyState.querySelector('[data-action="go-to-add"]');
+        if (goToAddBtn) {
+            goToAddBtn.addEventListener('click', () => {
+                switchView('add');
+            });
+        }
+    }
+    
+    /**
      * Renders the sightings list
      * 
      * @param {Array} sightings - Array of sighting objects
@@ -183,22 +229,35 @@ const UI = (function() {
     function renderSightings(sightings) {
         elements.sightingsLoading.hidden = true;
         
-        if (!sightings || sightings.length === 0) {
-            // No sightings so show empty state and hide list
-            elements.sightingsEmpty.hidden = false;
+        const count = sightings ? sightings.length : 0;
+        
+        // Cache sightings for modal access (includes server-only sightings)
+        cachedSightings = sightings || [];
+        
+        // Update the pangolin count display
+        updateSightingCountDisplay(count);
+        
+        if (count === 0) {
             elements.sightingsList.innerHTML = '';
-
-        } else {
-            // Has sighting so hide empty state and show list
-            elements.sightingsEmpty.hidden = true;
-            const html = sightings.map(sighting => createSightingCard(sighting)).join('');
-            elements.sightingsList.innerHTML = html;
+            return;
         }
         
-
-
+        // Render the sighting cards
+        const html = sightings.map(sighting => createSightingCard(sighting)).join('');
+        elements.sightingsList.innerHTML = html;
         
-        Config.debug('UI', `Rendered ${sightings ? sightings.length:0} sightings`);
+        Config.debug('UI', `Rendered ${count} sightings`);
+    }
+    
+    /**
+     * Gets a cached sighting by clientId
+     * Used for opening modals - works for both local and server-only sightings
+     * 
+     * @param {string} clientId - The client ID to find
+     * @returns {Object|null} The sighting or null if not found
+     */
+    function getCachedSighting(clientId) {
+        return cachedSightings.find(s => s.clientId === clientId) || null;
     }
     
     /**
@@ -236,7 +295,7 @@ const UI = (function() {
         const thumbnailHtml = sighting.hasImage ?
             `<img src="${sighting.thumbnailUrl || Config.IMAGE.PLACEHOLDER}" 
                   alt="Sighting photo" loading="lazy">` :
-            `<span class="no-image">🦔</span>`;
+            `<span class="no-image">//pangolin icon\\</span>`;
         
         const notesPreview = sighting.notes ? 
             escapeHtml(sighting.notes.substring(0, 80)) + 
@@ -244,7 +303,7 @@ const UI = (function() {
             '';
         
         const pendingBadge = !sighting.synced ?
-            `<span class="pending-badge">⏳ Pending sync</span>` : '';
+            `<span class="pending-badge">//pending icon\\ Pending sync</span>` : '';
         
         return `
             <li class="sighting-card ${!sighting.synced ? 'pending' : ''}" 
@@ -257,7 +316,7 @@ const UI = (function() {
                 <div class="sighting-info">
                     <div class="sighting-header">
                         <span class="sighting-status ${sighting.status}">
-                            ${sighting.status === 'alive' ? '💚' : '💔'} ${sighting.status}
+                            ${sighting.status === 'alive' ? '//alive icon\\' : '//dead icon\\'} ${sighting.status}
                         </span>
                         <span class="sighting-date">${formattedDate}</span>
                     </div>
@@ -267,7 +326,7 @@ const UI = (function() {
                         </div>` : ''
                     }
                     <div class="sighting-location">
-                        📍 ${locationText}
+                        //location icon\\ ${locationText}
                     </div>
                     ${notesPreview ? 
                         `<div class="sighting-notes">${notesPreview}</div>` : ''
@@ -644,10 +703,10 @@ const UI = (function() {
      */
     function showToast(message, type = 'info', duration = Config.UI.TOAST_DURATION) {
         const icons = {
-            success: '✓',
-            error: '✕',
-            warning: '⚠',
-            info: 'ℹ'
+            success: '//success icon\\',
+            error: '//error icon\\',
+            warning: '//warning icon\\',
+            info: '//info icon\\'
         };
         
         const toast = document.createElement('div');
@@ -704,7 +763,7 @@ const UI = (function() {
         const mortalityType = sighting.mortalityType ? 
             Config.getMortalityType(sighting.mortalityType) : null;
         
-        elements.modalTitle.textContent = `${sighting.status === 'alive' ? '💚' : '💔'} Pangolin Sighting`;
+        elements.modalTitle.textContent = `${sighting.status === 'alive' ? '//alive icon\\' : '//dead icon\\'} Pangolin Sighting`;
         
         elements.modalBody.innerHTML = `
             ${sighting.imageUrl ? 
@@ -715,7 +774,7 @@ const UI = (function() {
                 <div class="modal-detail-label">Status</div>
                 <div class="modal-detail-value">
                     <span class="sighting-status ${sighting.status}">
-                        ${sighting.status === 'alive' ? '💚 Alive' : '💔 Dead'}
+                        ${sighting.status === 'alive' ? '//alive icon\\ Alive' : '//dead icon\\ Dead'}
                     </span>
                 </div>
             </div>
@@ -732,7 +791,7 @@ const UI = (function() {
             <div class="modal-detail">
                 <div class="modal-detail-label">Location</div>
                 <div class="modal-detail-value">
-                    📍 ${Location.formatCoordinates(
+                    //location icon\\ ${Location.formatCoordinates(
                         sighting.latitude, 
                         sighting.longitude,
                         sighting.locationAccuracy
@@ -758,7 +817,7 @@ const UI = (function() {
             
             ${!sighting.synced ? `
                 <div class="pending-badge" style="margin-top: 16px;">
-                    ⏳ Pending sync
+                    //pending icon\\ Pending sync
                 </div>
             ` : ''}
         `;
@@ -879,6 +938,8 @@ const UI = (function() {
         renderSightings,
         showSightingsLoading,
         hidesSightingsLoading,
+        updateSightingCountDisplay,
+        getCachedSighting,
         
         // Form
         updatePhotoPreview,
