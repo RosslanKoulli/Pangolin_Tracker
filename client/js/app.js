@@ -141,7 +141,9 @@ const App = (function() {
             if (API.isOnline) {
                 try {
                     const serverSightings = await API.getSightings({ status: filter });
-                    sightings = mergeSightings(sightings, serverSightings);
+                    
+                    // Clean up stale local entries and merge
+                    sightings = await reconcileAndMergeSightings(sightings, serverSightings);
                 } catch (error) {
                     Config.debug('App', 'Server fetch failed:', error.message);
                 }
@@ -166,6 +168,65 @@ const App = (function() {
         }
     }
     
+    /**
+     * Reconciles local and server sightings:
+     * - Keeps unsynced local sightings (pending upload)
+     * - Removes synced local sightings that no longer exist on server
+     * - Merges server sightings into the result
+     *
+     */
+    async function reconcileAndMergeSightings(local, server) {
+        const serverClientIds = new Set(server.map(s => s.client_id || s.clientId));
+        const merged = new Map();
+        
+        // Process local sightings
+        for (const localSighting of local) {
+            if (!localSighting.synced) {
+                // Keep unsynced local sightings (not yet uploaded)
+                merged.set(localSighting.clientId, localSighting);
+            } else if (serverClientIds.has(localSighting.clientId)) {
+                // Keep synced local sightings that still exist on server
+                merged.set(localSighting.clientId, localSighting);
+            } else {
+                // Delete synced local sightings that no longer exist on server
+                Config.debug('App', 'Removing stale local sighting:', localSighting.clientId);
+                try {
+                    await Database.deleteSighting(localSighting.clientId);
+                } catch (err) {
+                    Config.debug('App', 'Failed to delete stale sighting:', err.message);
+                }
+            }
+        }
+        
+        // Add server sightings that aren't already in local
+        for (const s of server) {
+            const clientId = s.client_id || s.clientId;
+            if (!merged.has(clientId)) {
+                merged.set(clientId, {
+                    clientId,
+                    serverId: s.id,
+                    latitude: parseFloat(s.latitude),
+                    longitude: parseFloat(s.longitude),
+                    locationAccuracy: s.location_accuracy,
+                    status: s.status,
+                    mortalityType: s.mortality_type,
+                    notes: s.notes,
+                    hasImage: !!s.image_url,
+                    imageUrl: s.image_url,
+                    thumbnailUrl: s.thumbnail_url || s.image_url,
+                    recordedAt: s.recorded_at,
+                    synced: true,
+                    syncedAt: s.synced_at
+                });
+            }
+        }
+        
+        return Array.from(merged.values()).sort((a, b) => 
+            new Date(b.recordedAt) - new Date(a.recordedAt)
+        );
+    }
+    
+    // Old mergeSightings for offline use
     function mergeSightings(local, server) {
         const merged = new Map();
         
