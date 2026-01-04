@@ -20,36 +20,14 @@ const App = (function() {
             await updatePendingSyncCount();
             await loadSightings();
             
-            // Request location permission on startup
-            requestLocationPermission();
+            // Note: Location permission is requested when user navigates to Record tab
+            // or clicks "Use My Location" - iOS requires user gesture for geolocation
             
             isInitialized = true;
             Config.debug('App', 'Initialization complete');
         } catch (error) {
             console.error('App initialization failed:', error);
             UI.showToast('Failed to initialize app. Please refresh.', 'error');
-        }
-    }
-    
-    /**
-     * Requests location permission from the user on app startup
-     * This ensures the browser prompts for location access
-     */
-    async function requestLocationPermission() {
-        try {
-            Config.debug('App', 'Requesting location permission...');
-            
-            // This will trigger the browser's location permission prompt
-            const position = await Location.getCurrentPosition({ timeout: 10000 });
-            
-            Config.debug('App', 'Location permission granted:', 
-                position.coords.latitude.toFixed(4), 
-                position.coords.longitude.toFixed(4)
-            );
-            
-        } catch (error) {
-            // User denied or error occurred - that's okay, they can still use the map
-            Config.debug('App', 'Location permission request result:', error.code || error.message);
         }
     }
     
@@ -173,7 +151,6 @@ const App = (function() {
      * - Keeps unsynced local sightings (pending upload)
      * - Removes synced local sightings that no longer exist on server
      * - Merges server sightings into the result
-     *
      */
     async function reconcileAndMergeSightings(local, server) {
         const serverClientIds = new Set(server.map(s => s.client_id || s.clientId));
@@ -226,7 +203,7 @@ const App = (function() {
         );
     }
     
-    // Old mergeSightings for offline use
+    // Keep old mergeSightings for offline use (when we can't reconcile)
     function mergeSightings(local, server) {
         const merged = new Map();
         
@@ -342,12 +319,26 @@ const App = (function() {
                         continue;
                     }
                     
+                    // Debug: Log sighting data before sync
+                    Config.debug('App', 'Syncing sighting:', JSON.stringify({
+                        clientId: sighting.clientId,
+                        status: sighting.status,
+                        mortalityType: sighting.mortalityType,
+                        latitude: sighting.latitude,
+                        longitude: sighting.longitude
+                    }));
+                    
                     const serverResponse = await API.syncSighting(sighting);
                     await Database.markSynced(item.clientId, serverResponse.id);
                     await Database.removeSyncQueueItem(item.id);
                     synced++;
                 } catch (error) {
+                    // Log full error details including server validation errors
                     Config.debug('App', 'Sync failed:', item.clientId, error);
+                    if (error.data && error.data.errors) {
+                        Config.debug('App', 'Server validation errors:', JSON.stringify(error.data.errors));
+                    }
+                    console.error('Full sync error:', error, error.data);
                     await Database.incrementSyncAttempt(item.id);
                     failed++;
                 }
@@ -441,8 +432,43 @@ const App = (function() {
     }
     
     async function requestLocation() {
-        try { await Location.getCurrentPosition(); }
-        catch (error) { Config.debug('App', 'Location error:', error.message); }
+        // Show feedback immediately
+        UI.elements.locationText.textContent = 'Getting your location...';
+        if (UI.elements.btnMyLocation) UI.elements.btnMyLocation.disabled = true;
+        
+        try {
+            Config.debug('App', 'Requesting location (user gesture)...');
+            
+            const position = await Location.getCurrentPosition({ 
+                timeout: 15000,
+                enableHighAccuracy: true 
+            });
+            
+            // Success - set the marker
+            const { latitude, longitude, accuracy } = position.coords;
+            UI.setLocationMarker(latitude, longitude, accuracy);
+            
+            Config.debug('App', `Location acquired: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+            UI.showToast('Location found!', 'success');
+            
+        } catch (error) {
+            Config.debug('App', 'Location error:', error.message, error.code);
+            
+            // Show appropriate error message
+            if (error.code === 'PERMISSION_DENIED') {
+                UI.showToast('Location permission denied. Please enable in Settings.', 'error');
+            } else if (error.code === 'POSITION_UNAVAILABLE') {
+                UI.showToast('Unable to get location. Try again or tap the map.', 'warning');
+            } else if (error.code === 'TIMEOUT') {
+                UI.showToast('Location timed out. Try again or tap the map.', 'warning');
+            } else {
+                UI.showToast('Could not get location. Tap the map instead.', 'warning');
+            }
+            
+            UI.elements.locationText.textContent = 'Tap the map to set location';
+        } finally {
+            if (UI.elements.btnMyLocation) UI.elements.btnMyLocation.disabled = false;
+        }
     }
     
     async function handleFormSubmit(event) {
@@ -461,9 +487,17 @@ const App = (function() {
         try {
             const formData = new FormData(UI.elements.sightingForm);
             
+            // Get and normalize coordinates
+            let latitude = parseFloat(UI.elements.latitude.value);
+            let longitude = parseFloat(UI.elements.longitude.value);
+            
+            // Ensure valid ranges (fix map wrapping issues)
+            latitude = Math.max(-90, Math.min(90, latitude));
+            longitude = ((longitude + 180) % 360 + 360) % 360 - 180;
+            
             const sighting = {
-                latitude: parseFloat(UI.elements.latitude.value),
-                longitude: parseFloat(UI.elements.longitude.value),
+                latitude: latitude,
+                longitude: longitude,
                 locationAccuracy: parseFloat(UI.elements.locationAccuracy.value) || null,
                 status: formData.get('status'),
                 mortalityType: formData.get('status') === 'dead' ? formData.get('mortalityType') : null,

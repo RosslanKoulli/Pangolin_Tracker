@@ -194,8 +194,8 @@ const API = (function() {
     async function createSighting(sighting, imageBlob = null) {
         const formData = new FormData();
         
-        // Add sighting data as JSON
-        formData.append('data', JSON.stringify({
+        // Build the data object
+        const sightingData = {
             client_id: sighting.clientId,
             latitude: sighting.latitude,
             longitude: sighting.longitude,
@@ -204,7 +204,13 @@ const API = (function() {
             mortality_type: sighting.mortalityType || null,
             notes: sighting.notes || '',
             recorded_at: sighting.recordedAt
-        }));
+        };
+        
+        // Debug: Log what we're sending
+        Config.debug('API', 'Creating sighting with data:', JSON.stringify(sightingData));
+        
+        // Add sighting data as JSON
+        formData.append('data', JSON.stringify(sightingData));
         
         // Add image if present
         if (imageBlob) {

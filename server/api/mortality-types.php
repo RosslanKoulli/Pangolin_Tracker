@@ -27,10 +27,10 @@ try {
     
     // Add icons (matching frontend config)
     $icons = [
-        'fence_electrocution' => '<img src="icons/ElectrocutionSign.png" alt="" class="inline-icon">',
-        'fence_non_electric' => '<img src="icons/ChainFence.png" alt="" class="inline-icon">',
-        'road_death' => '<img src="icons/Road Accident.png" alt="" class="inline-icon">',
-        'other' => '<img src="icons/Question_Mark.png" alt="" class="inline-icon">'
+        'fence_electrocution' => '<img src="client/icons/ElectrocutionSign.png" alt="" class="inline-icon">',
+        'fence_non_electric' => '<img src="client/icons/ChainFence.png" alt="" class="inline-icon">',
+        'road_death' => '<img src="client/icons/Road Accident.png" alt="" class="inline-icon">',
+        'other' => '<img src="client/icons/Question Mark.png" alt="" class="inline-icon">'
     ];
     
     $types = array_map(function($type) use ($icons) {
@@ -38,7 +38,7 @@ try {
             'id' => (int) $type['id'],
             'code' => $type['code'],
             'description' => $type['description'],
-            'icon' => $icons[$type['code']] ?? '<img src="icons/Question_Mark.png" alt="" class="inline-icon">'
+            'icon' => $icons[$type['code']] ?? '<img src="client/icons/Question Mark.png" alt="" class="inline-icon">'
         ];
     }, $types);
     

@@ -601,17 +601,17 @@ body {
     margin-bottom: var(--space-sm);
 }
 
-/* Only apply full-size styling to the actual preview image and not on the placeholder icons */
+/* Only apply full-size styling to the actual preview image, not placeholder icons */
 .photo-preview > img#previewImage {
     width: 100%;
     height: 100%;
     object-fit: contain;
 }
 
-/* Camera placeholder icon */
+/* Camera placeholder icon - keep it small */
 .photo-placeholder .camera-icon {
-    width: 84px;
-    height: 84px;
+    width: 64px;
+    height: 64px;
     object-fit: contain;
     opacity: 0.6;
 }
@@ -1373,4 +1373,64 @@ textarea:focus {
     width: 2em;
     height: 2em;
     object-fit: contain;
+}
+
+/* ============================================
+   Offline Map Fallback Styles
+   ============================================ */
+
+/* Full fallback when Leaflet not available */
+.map-offline-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 200px;
+    background: #f0f0f0;
+    border-radius: 8px;
+    text-align: center;
+    padding: 20px;
+    color: #666;
+}
+
+.map-offline-message .offline-map-icon {
+    width: 48px;
+    height: 48px;
+    opacity: 0.5;
+    margin-bottom: 10px;
+}
+
+.map-offline-message p {
+    margin: 5px 0;
+}
+
+/* Overlay when tiles fail to load */
+.map-offline-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.95);
+    padding: 15px 25px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.map-offline-overlay p {
+    margin: 5px 0;
+    color: #333;
+}
+
+.map-offline-overlay .small {
+    font-size: 12px;
+    color: #666;
+}
+
+/* Ensure map container is positioned for overlay */
+.location-map-container {
+    position: relative;
 }

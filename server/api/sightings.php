@@ -155,9 +155,10 @@ function formatSighting(array $row): array {
         'mortality_description' => $row['mortality_type_description'] ?? null,
         'notes' => $row['notes'],
         'image_url' => $row['image_filename'] ? getImageUrl($row['image_filename']) : null,
-        'recorded_at' => $row['recorded_at'],
-        'synced_at' => $row['synced_at'],
-        'created_at' => $row['created_at']
+        // Format timestamps as ISO 8601 with UTC indicator for consistent parsing
+        'recorded_at' => formatTimestamp($row['recorded_at']),
+        'synced_at' => formatTimestamp($row['synced_at']),
+        'created_at' => formatTimestamp($row['created_at'])
     ];
 }
 
@@ -222,7 +223,18 @@ function handlePost(): void {
         ? (float) $data['location_accuracy'] 
         : null;
     $notes = sanitizeString($data['notes'] ?? null, 1000);
-    $recordedAt = $data['recorded_at'] ?? date('Y-m-d H:i:s');
+    
+    // Parse recorded_at - convert ISO 8601 to MySQL datetime format
+    $recordedAt = date('Y-m-d H:i:s'); // Default to now
+    if (!empty($data['recorded_at'])) {
+        try {
+            $dt = new DateTime($data['recorded_at']);
+            $recordedAt = $dt->format('Y-m-d H:i:s');
+        } catch (Exception $e) {
+            error_log('Invalid recorded_at format: ' . $data['recorded_at']);
+            // Keep default
+        }
+    }
     
     // Get mortality type ID if provided
     $mortalityTypeId = null;
