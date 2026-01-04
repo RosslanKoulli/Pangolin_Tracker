@@ -601,10 +601,19 @@ body {
     margin-bottom: var(--space-sm);
 }
 
-.photo-preview img {
+/* Only apply full-size styling to the actual preview image and not on the placeholder icons */
+.photo-preview > img#previewImage {
     width: 100%;
     height: 100%;
     object-fit: contain;
+}
+
+/* Camera placeholder icon */
+.photo-placeholder .camera-icon {
+    width: 84px;
+    height: 84px;
+    object-fit: contain;
+    opacity: 0.6;
 }
 
 .photo-actions {
@@ -1268,4 +1277,100 @@ textarea:focus {
 .loading-state[hidden],
 .empty-state[hidden] {
     display:none !important;
+}
+
+/* ============================================
+   Inline Icon Styles
+   ============================================
+   Icons used inline with text throughout the app
+*/
+.inline-icon {
+    width: 1em;
+    height: 1em;
+    vertical-align: middle;
+    display: inline-block;
+    object-fit: contain;
+}
+
+/* Larger icons for status indicators */
+.sighting-status .inline-icon {
+    width: 1.2em;
+    height: 1.2em;
+}
+
+/* Toast icons slightly larger */
+.toast-icon .inline-icon {
+    width: 1.4em;
+    height: 1.4em;
+}
+
+/* Modal title icons */
+.modal-title .inline-icon {
+    width: 1.3em;
+    height: 1.3em;
+}
+
+/* Pending badge icons */
+.pending-badge .inline-icon {
+    width: 1em;
+    height: 1em;
+}
+
+/* Radio button icons in form */
+.radio-icon .inline-icon {
+    width: 1.5em;
+    height: 1.5em;
+}
+
+/* Pangolin icon styles */
+.pangolin-icon {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+}
+
+/* Logo pangolin in header */
+.logo-pangolin {
+    width: 1.5em;
+    height: 1.5em;
+    vertical-align: middle;
+    object-fit: contain;
+}
+
+/* No-image placeholder pangolin */
+.no-image .pangolin-icon {
+    width: 40px;
+    height: 40px;
+    opacity: 0.5;
+}
+
+/* Navigation tab icons */
+.nav-icon {
+    width: 1.2em;
+    height: 1.2em;
+    vertical-align: middle;
+    object-fit: contain;
+}
+
+/* Sync button icon */
+.sync-img {
+    width: 1.5em;
+    height: 1.5em;
+    vertical-align: middle;
+    object-fit: contain;
+}
+
+/* Camera icon for buttons */
+.camera-icon {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    opacity: 0.6;
+}
+
+/* Status card icons (alive/dead) */
+.status-img {
+    width: 2em;
+    height: 2em;
+    object-fit: contain;
 }

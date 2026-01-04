@@ -193,7 +193,7 @@ const UI = (function() {
         if (count === 0) {
             // No sightings - show empty state message
             emptyState.innerHTML = `
-                <div class="empty-illustration" aria-hidden="true">//pangolin icon\\</div>
+                <div class="empty-illustration" aria-hidden="true"><img src="icons/Pangolin.png" alt="" class="pangolin-icon"></div>
                 <h3>No Sightings Yet</h3>
                 <p>Be the first to record a pangolin sighting in your area!</p>
                 <button class="btn btn-primary" data-action="go-to-add">
@@ -204,7 +204,7 @@ const UI = (function() {
             // Has sightings - show count message
             const sightingWord = count === 1 ? 'sighting has' : 'sightings have';
             emptyState.innerHTML = `
-                <div class="empty-illustration" aria-hidden="true">//pangolin icon\\</div>
+                <div class="empty-illustration" aria-hidden="true"><img src="icons/Pangolin.png" alt="" class="pangolin-icon"></div>
                 <h3>${count} Pangolin ${sightingWord} been recorded</h3>
                 <button class="btn btn-primary" data-action="go-to-add">
                     Record Sighting
@@ -295,7 +295,7 @@ const UI = (function() {
         const thumbnailHtml = sighting.hasImage ?
             `<img src="${sighting.thumbnailUrl || Config.IMAGE.PLACEHOLDER}" 
                   alt="Sighting photo" loading="lazy">` :
-            `<span class="no-image">//pangolin icon\\</span>`;
+            `<span class="no-image"><img src="icons/Pangolin.png" alt="" class="pangolin-icon"></span>`;
         
         const notesPreview = sighting.notes ? 
             escapeHtml(sighting.notes.substring(0, 80)) + 
@@ -303,7 +303,7 @@ const UI = (function() {
             '';
         
         const pendingBadge = !sighting.synced ?
-            `<span class="pending-badge">//pending icon\\ Pending sync</span>` : '';
+            `<span class="pending-badge"><img src="icons/PendingIcon.png" alt="" class="inline-icon"> Pending sync</span>` : '';
         
         return `
             <li class="sighting-card ${!sighting.synced ? 'pending' : ''}" 
@@ -316,7 +316,7 @@ const UI = (function() {
                 <div class="sighting-info">
                     <div class="sighting-header">
                         <span class="sighting-status ${sighting.status}">
-                            ${sighting.status === 'alive' ? '//alive icon\\' : '//dead icon\\'} ${sighting.status}
+                            ${sighting.status === 'alive' ? '<img src="icons/Heart.png" alt="" class="inline-icon">' : '<img src="icons/tombstone.png" alt="" class="inline-icon">'} ${sighting.status}
                         </span>
                         <span class="sighting-date">${formattedDate}</span>
                     </div>
@@ -326,7 +326,7 @@ const UI = (function() {
                         </div>` : ''
                     }
                     <div class="sighting-location">
-                        //location icon\\ ${locationText}
+                        <img src="icons/locationDisplay.png" alt="" class="inline-icon"> ${locationText}
                     </div>
                     ${notesPreview ? 
                         `<div class="sighting-notes">${notesPreview}</div>` : ''
@@ -703,10 +703,10 @@ const UI = (function() {
      */
     function showToast(message, type = 'info', duration = Config.UI.TOAST_DURATION) {
         const icons = {
-            success: '//success icon\\',
-            error: '//error icon\\',
-            warning: '//warning icon\\',
-            info: '//info icon\\'
+            success: '<img src="icons/Correct checkmark.png" alt="" class="inline-icon">',
+            error: '<img src="icons/Error Cross.png" alt="" class="inline-icon">',
+            warning: '<img src="icons/WarningSign.png" alt="" class="inline-icon">',
+            info: '<img src="icons/informationIcon.png" alt="" class="inline-icon">'
         };
         
         const toast = document.createElement('div');
@@ -763,7 +763,7 @@ const UI = (function() {
         const mortalityType = sighting.mortalityType ? 
             Config.getMortalityType(sighting.mortalityType) : null;
         
-        elements.modalTitle.textContent = `${sighting.status === 'alive' ? '//alive icon\\' : '//dead icon\\'} Pangolin Sighting`;
+        elements.modalTitle.innerHTML = `${sighting.status === 'alive' ? '<img src="icons/Heart.png" alt="" class="inline-icon">' : '<img src="icons/tombstone.png" alt="" class="inline-icon">'} Pangolin Sighting`;
         
         elements.modalBody.innerHTML = `
             ${sighting.imageUrl ? 
@@ -774,7 +774,7 @@ const UI = (function() {
                 <div class="modal-detail-label">Status</div>
                 <div class="modal-detail-value">
                     <span class="sighting-status ${sighting.status}">
-                        ${sighting.status === 'alive' ? '//alive icon\\ Alive' : '//dead icon\\ Dead'}
+                        ${sighting.status === 'alive' ? '<img src="icons/Heart.png" alt="" class="inline-icon"> Alive' : '<img src="icons/tombstone.png" alt="" class="inline-icon"> Dead'}
                     </span>
                 </div>
             </div>
@@ -791,7 +791,7 @@ const UI = (function() {
             <div class="modal-detail">
                 <div class="modal-detail-label">Location</div>
                 <div class="modal-detail-value">
-                    //location icon\\ ${Location.formatCoordinates(
+                    <img src="icons/locationDisplay.png" alt="" class="inline-icon"> ${Location.formatCoordinates(
                         sighting.latitude, 
                         sighting.longitude,
                         sighting.locationAccuracy
@@ -817,7 +817,7 @@ const UI = (function() {
             
             ${!sighting.synced ? `
                 <div class="pending-badge" style="margin-top: 16px;">
-                    //pending icon\\ Pending sync
+                    <img src="icons/PendingIcon.png" alt="" class="inline-icon"> Pending sync
                 </div>
             ` : ''}
         `;

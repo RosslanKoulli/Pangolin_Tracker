@@ -19,12 +19,37 @@ const App = (function() {
             UI.updateConnectionStatus(navigator.onLine);
             await updatePendingSyncCount();
             await loadSightings();
-            // Don't auto-request location - user will pick on map
+            
+            // Request location permission on startup
+            requestLocationPermission();
+            
             isInitialized = true;
             Config.debug('App', 'Initialization complete');
         } catch (error) {
             console.error('App initialization failed:', error);
             UI.showToast('Failed to initialize app. Please refresh.', 'error');
+        }
+    }
+    
+    /**
+     * Requests location permission from the user on app startup
+     * This ensures the browser prompts for location access
+     */
+    async function requestLocationPermission() {
+        try {
+            Config.debug('App', 'Requesting location permission...');
+            
+            // This will trigger the browser's location permission prompt
+            const position = await Location.getCurrentPosition({ timeout: 10000 });
+            
+            Config.debug('App', 'Location permission granted:', 
+                position.coords.latitude.toFixed(4), 
+                position.coords.longitude.toFixed(4)
+            );
+            
+        } catch (error) {
+            // User denied or error occurred - that's okay, they can still use the map
+            Config.debug('App', 'Location permission request result:', error.code || error.message);
         }
     }
     

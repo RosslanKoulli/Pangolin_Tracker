@@ -137,10 +137,10 @@ const Config = Object.freeze({
     // Mortality Types (static reference data)
     // ============================================
     MORTALITY_TYPES: Object.freeze([
-        { id: 1, code: 'fence_electrocution', description: 'Fence death: electrocution', icon: '//electrocution icon\\' },
-        { id: 2, code: 'fence_non_electric', description: 'Fence death: caught on non-electrified fence', icon: '//fence icon\\' },
-        { id: 3, code: 'road_death', description: 'Road death', icon: '//road icon\\' },
-        { id: 4, code: 'other', description: 'Other', icon: '//other icon\\' }
+        { id: 1, code: 'fence_electrocution', description: 'Fence death: electrocution', icon: '<img src="icons/ElectrocutionSign.png" alt="" class="inline-icon">' },
+        { id: 2, code: 'fence_non_electric', description: 'Fence death: caught on non-electrified fence', icon: '<img src="icons/ChainFence.png" alt="" class="inline-icon">' },
+        { id: 3, code: 'road_death', description: 'Road death', icon: '<img src="icons/Road Accident.png" alt="" class="inline-icon">' },
+        { id: 4, code: 'other', description: 'Other', icon: '<img src="icons/Question Mark.png" alt="" class="inline-icon">' }
     ]),
     
     // ============================================
